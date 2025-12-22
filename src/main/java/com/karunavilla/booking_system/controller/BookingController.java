@@ -1,17 +1,16 @@
 package com.karunavilla.booking_system.controller;
 
+import com.karunavilla.booking_system.Entity.Room;
 import com.karunavilla.booking_system.model.BookingDTO;
 import com.karunavilla.booking_system.model.BookingResponseDTO;
+import com.karunavilla.booking_system.model.RoomAvailabilityRequest;
+import com.karunavilla.booking_system.model.RoomAvailabilityResponse; // Added import
 import com.karunavilla.booking_system.service.BookingService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -49,4 +48,16 @@ public class BookingController {
         bookingService.deleteBooking(id);
         return ResponseEntity.ok("Booking deleted successfully");
     }
+
+    @GetMapping("/rooms/available")
+    public ResponseEntity<List<RoomAvailabilityResponse>> getRoomsAvailable(
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        RoomAvailabilityRequest request = new RoomAvailabilityRequest();
+        request.setStartDate(startDate);
+        request.setEndDate(endDate);
+        List<RoomAvailabilityResponse> availableRooms = bookingService.getRoomsAvailable(request);
+        return ResponseEntity.ok(availableRooms);
+    }
 }
+

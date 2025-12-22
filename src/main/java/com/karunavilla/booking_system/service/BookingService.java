@@ -5,6 +5,8 @@ import com.karunavilla.booking_system.Entity.Guest;
 import com.karunavilla.booking_system.Entity.Room;
 import com.karunavilla.booking_system.model.BookingDTO;
 import com.karunavilla.booking_system.model.BookingResponseDTO;
+import com.karunavilla.booking_system.model.RoomAvailabilityRequest;
+import com.karunavilla.booking_system.model.RoomAvailabilityResponse;
 import com.karunavilla.booking_system.repository.BookingRepository;
 import com.karunavilla.booking_system.repository.GuestRepository;
 import com.karunavilla.booking_system.repository.RoomRepository;
@@ -15,11 +17,15 @@ import com.karunavilla.booking_system.repository.PaymentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Scheduled; // Added import for Scheduled
 
 import java.time.ZoneOffset;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class BookingService {
@@ -87,6 +93,24 @@ public class BookingService {
             room.setStatus("AVAILABLE");
             roomRepository.save(room);
             // TODO: Implement a scheduler to call this method for expired bookings
+        }
+    }
+
+    // New scheduled method to update room status after checkout
+    @Scheduled(cron = "0 0 6 * * ?") // Runs every day at 11 AM
+    @Transactional
+    public void updateRoomStatusScheduled() {
+        System.out.println("Running scheduled task: updateRoomStatusScheduled at " + Instant.now());
+        List<Booking> expiredBookings = bookingRepository.findExpiredBookingsWithBookedRooms(Instant.now());
+
+        for (Booking booking : expiredBookings) {
+            Room room = booking.getRoom();
+            // Double check if the room is indeed BOOKED to prevent unintended status changes
+            if ("BOOKED".equalsIgnoreCase(room.getStatus())) {
+                room.setStatus("AVAILABLE");
+                roomRepository.save(room);
+                System.out.println("Room " + room.getRoomNumber() + " status updated to AVAILABLE after checkout for booking " + booking.getId());
+            }
         }
     }
 
@@ -186,13 +210,13 @@ public class BookingService {
             existingBooking.setTotalAmount(nightlyRate.multiply(BigDecimal.valueOf(days)));
             existingBooking.setAmountPerNight(nightlyRate); // Update amountPerNight as well
         }
-
         
         existingBooking = bookingRepository.save(existingBooking);
 
         return getBookingDetailsById(existingBooking.getId()); // Return DTO of updated booking
     }
 
+    @Transactional
     public void deleteBooking(Long bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found with ID: " + bookingId));
@@ -202,7 +226,33 @@ public class BookingService {
              booking.getRoom().setStatus("AVAILABLE");
              roomRepository.save(booking.getRoom());
         }
-        bookingRepository.delete(booking);
+        
+        Guest guest = booking.getGuest(); // Get the associated guest
+        bookingRepository.delete(booking); // Delete the booking
+        
+        // Check if the guest has any other bookings
+        if (guestRepository.countBookingsByGuestId(guest.getId()) == 0) {
+            guestRepository.delete(guest); // If no other bookings, delete the guest
+        }
+    }
+
+    public List<RoomAvailabilityResponse> getRoomsAvailable(RoomAvailabilityRequest request) {
+        Instant requestedCheckIn = request.getStartDate().atStartOfDay().toInstant(ZoneOffset.UTC);
+        Instant requestedCheckOut = request.getEndDate().atStartOfDay().toInstant(ZoneOffset.UTC);
+
+        List<Room> allRooms = roomRepository.findAll();
+
+        Set<Long> bookedRoomIds = bookingRepository.findOverlappingBookings(requestedCheckIn, requestedCheckOut)
+                .stream()
+                .map(booking -> booking.getRoom().getId())
+                .collect(Collectors.toSet());
+
+        return allRooms.stream()
+                .filter(room -> !bookedRoomIds.contains(room.getId()))
+                .map(RoomAvailabilityResponse::new) // Using the constructor for mapping
+                .collect(Collectors.toList());
     }
 }
+
+
 
