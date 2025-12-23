@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -20,7 +21,7 @@ public class BookingController {
     private BookingService bookingService;
 
     @PostMapping(path = "/saveBooking")
-    public ResponseEntity<?> saveBooking(@RequestBody BookingDTO booking){
+    public ResponseEntity<?> saveBooking(@Valid @RequestBody BookingDTO booking){
         bookingService.createBooking(booking);
         return ResponseEntity.ok("Booking created successfully");
     }

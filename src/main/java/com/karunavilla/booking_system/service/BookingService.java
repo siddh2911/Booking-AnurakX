@@ -17,7 +17,6 @@ import com.karunavilla.booking_system.repository.PaymentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.scheduling.annotation.Scheduled; // Added import for Scheduled
 
 import java.time.ZoneOffset;
 import java.time.Instant;
@@ -52,26 +51,28 @@ public class BookingService {
 
         Room room = roomRepository.findByRoomNumber(bookingDTO.getRoomNo())
                 .orElseThrow(() -> new RuntimeException("Room not found"));
-        Booking booking = new Booking();
-        BigDecimal calculatedTotalAmount = null;
-        if (room.getStatus() == null || !room.getStatus().equalsIgnoreCase("BOOKED")) { // Added null check
-            booking.setGuest(guest);
-            booking.setRoom(room);
-            booking.setCheckInDate(bookingDTO.getCheckInDate().atStartOfDay().toInstant(ZoneOffset.UTC));
-            booking.setCheckOutDate(bookingDTO.getCheckOutDate().atStartOfDay().toInstant(ZoneOffset.UTC));
-            booking.setBookingSource(bookingDTO.getBookingSource());
-            booking.setInternalNotes(bookingDTO.getInternalNotes());
-            booking.setAmountPerNight(bookingDTO.getNightlyRate()); // Set amountPerNight
-            calculatedTotalAmount = bookingDTO.getNightlyRate().multiply(BigDecimal.valueOf(bookingDTO.getCheckOutDate().toEpochDay() - bookingDTO.getCheckInDate().toEpochDay()));
-            booking.setTotalAmount(calculatedTotalAmount);
-            booking.setStatus("CONFIRMED");
-            booking.setPayments(new java.util.ArrayList<>());
 
-            room.setStatus("BOOKED"); // Set room status to BOOKED
-            roomRepository.save(room); // Save the updated room status
-        } else {
-            throw new RuntimeException("Room " + bookingDTO.getRoomNo() + " is already booked."); // Handle case where room is already booked
+        Instant checkInDate = bookingDTO.getCheckInDate().atStartOfDay().toInstant(ZoneOffset.UTC);
+        Instant checkOutDate = bookingDTO.getCheckOutDate().atStartOfDay().toInstant(ZoneOffset.UTC);
+
+        List<Booking> overlappingBookings = bookingRepository.findOverlappingBookingsForRoom(room, checkInDate, checkOutDate);
+
+        if (!overlappingBookings.isEmpty()) {
+            throw new RuntimeException("Room " + bookingDTO.getRoomNo() + " is not available for the selected dates.");
         }
+
+        Booking booking = new Booking();
+        booking.setGuest(guest);
+        booking.setRoom(room);
+        booking.setCheckInDate(checkInDate);
+        booking.setCheckOutDate(checkOutDate);
+        booking.setBookingSource(bookingDTO.getBookingSource());
+        booking.setInternalNotes(bookingDTO.getInternalNotes());
+        booking.setAmountPerNight(bookingDTO.getNightlyRate()); // Set amountPerNight
+        BigDecimal calculatedTotalAmount = bookingDTO.getNightlyRate().multiply(BigDecimal.valueOf(bookingDTO.getCheckOutDate().toEpochDay() - bookingDTO.getCheckInDate().toEpochDay()));
+        booking.setTotalAmount(calculatedTotalAmount);
+        booking.setStatus("CONFIRMED");
+        booking.setPayments(new java.util.ArrayList<>());
 
         if (bookingDTO.getAdvanceAmount() != null && calculatedTotalAmount != null) {
             Payment advancePayment = new Payment();
@@ -85,33 +86,6 @@ public class BookingService {
 
         booking = bookingRepository.save(booking);
         return booking;
-    }
-
-    public void updateRoomStatusAfterCheckout(Booking booking) {
-        if (booking.getCheckOutDate().isBefore(Instant.now())) {
-            Room room = booking.getRoom();
-            room.setStatus("AVAILABLE");
-            roomRepository.save(room);
-            // TODO: Implement a scheduler to call this method for expired bookings
-        }
-    }
-
-    // New scheduled method to update room status after checkout
-    @Scheduled(cron = "0 0 6 * * ?") // Runs every day at 11 AM
-    @Transactional
-    public void updateRoomStatusScheduled() {
-        System.out.println("Running scheduled task: updateRoomStatusScheduled at " + Instant.now());
-        List<Booking> expiredBookings = bookingRepository.findExpiredBookingsWithBookedRooms(Instant.now());
-
-        for (Booking booking : expiredBookings) {
-            Room room = booking.getRoom();
-            // Double check if the room is indeed BOOKED to prevent unintended status changes
-            if ("BOOKED".equalsIgnoreCase(room.getStatus())) {
-                room.setStatus("AVAILABLE");
-                roomRepository.save(room);
-                System.out.println("Room " + room.getRoomNumber() + " status updated to AVAILABLE after checkout for booking " + booking.getId());
-            }
-        }
     }
 
     public List<BookingResponseDTO> getAllBookingDetails() {
@@ -180,37 +154,67 @@ public class BookingService {
             if (bookingDTO.getFullName() != null) guest.setFullName(bookingDTO.getFullName());
             if (bookingDTO.getEmailId() != null) guest.setEmail(bookingDTO.getEmailId());
             if (bookingDTO.getMobileNumber() != null) guest.setMobileNumber(bookingDTO.getMobileNumber());
-            guestRepository.save(guest); // Save updated guest details
+            guestRepository.save(guest);
         }
 
-        // Update Room if room number is provided and different
+        // Determine the proposed state of the booking
+        Room proposedRoom = existingBooking.getRoom();
         if (bookingDTO.getRoomNo() != null && !bookingDTO.getRoomNo().equals(existingBooking.getRoom().getRoomNumber())) {
-            Room newRoom = roomRepository.findByRoomNumber(bookingDTO.getRoomNo())
+            proposedRoom = roomRepository.findByRoomNumber(bookingDTO.getRoomNo())
                     .orElseThrow(() -> new RuntimeException("New room not found: " + bookingDTO.getRoomNo()));
-            // Optionally, mark old room as AVAILABLE if it's currently BOOKED by this booking
-            if (existingBooking.getRoom().getStatus().equalsIgnoreCase("BOOKED")) {
-                existingBooking.getRoom().setStatus("AVAILABLE");
-                roomRepository.save(existingBooking.getRoom());
-            }
-            newRoom.setStatus("BOOKED");
-            roomRepository.save(newRoom);
-            existingBooking.setRoom(newRoom);
         }
 
-        // Update Booking details
-        if (bookingDTO.getCheckInDate() != null) existingBooking.setCheckInDate(bookingDTO.getCheckInDate().atStartOfDay().toInstant(ZoneOffset.UTC));
-        if (bookingDTO.getCheckOutDate() != null) existingBooking.setCheckOutDate(bookingDTO.getCheckOutDate().atStartOfDay().toInstant(ZoneOffset.UTC));
+        LocalDate proposedCheckInDate = existingBooking.getCheckInDate().atZone(ZoneOffset.UTC).toLocalDate();
+        if (bookingDTO.getCheckInDate() != null) {
+            proposedCheckInDate = bookingDTO.getCheckInDate();
+        }
+
+        LocalDate proposedCheckOutDate = existingBooking.getCheckOutDate().atZone(ZoneOffset.UTC).toLocalDate();
+        if (bookingDTO.getCheckOutDate() != null) {
+            proposedCheckOutDate = bookingDTO.getCheckOutDate();
+        }
+
+        // Check for conflicts if room or dates are changing
+        if ((bookingDTO.getRoomNo() != null && !bookingDTO.getRoomNo().equals(existingBooking.getRoom().getRoomNumber())) ||
+            bookingDTO.getCheckInDate() != null || bookingDTO.getCheckOutDate() != null) {
+
+            Instant proposedCheckInInstant = proposedCheckInDate.atStartOfDay().toInstant(ZoneOffset.UTC);
+            Instant proposedCheckOutInstant = proposedCheckOutDate.atStartOfDay().toInstant(ZoneOffset.UTC);
+
+            List<Booking> overlapping = bookingRepository.findOverlappingBookingsForRoom(proposedRoom, proposedCheckInInstant, proposedCheckOutInstant);
+
+            // A booking can't overlap with itself.
+            final Long currentId = existingBooking.getId();
+            overlapping.removeIf(b -> b.getId().equals(currentId));
+
+            if (!overlapping.isEmpty()) {
+                throw new RuntimeException("Room is not available for the specified dates.");
+            }
+        }
+
+        // If no conflicts, update the booking
+        Room oldRoom = existingBooking.getRoom();
+        if(!oldRoom.equals(proposedRoom)){
+            oldRoom.setStatus("AVAILABLE");
+            roomRepository.save(oldRoom);
+            proposedRoom.setStatus("BOOKED");
+            roomRepository.save(proposedRoom);
+        }
+        existingBooking.setRoom(proposedRoom);
+        existingBooking.setCheckInDate(proposedCheckInDate.atStartOfDay().toInstant(ZoneOffset.UTC));
+        existingBooking.setCheckOutDate(proposedCheckOutDate.atStartOfDay().toInstant(ZoneOffset.UTC));
+
+
         if (bookingDTO.getBookingSource() != null) existingBooking.setBookingSource(bookingDTO.getBookingSource());
         if (bookingDTO.getInternalNotes() != null) existingBooking.setInternalNotes(bookingDTO.getInternalNotes());
         // Recalculate total amount if nightly rate or dates change
         if (bookingDTO.getNightlyRate() != null || bookingDTO.getCheckInDate() != null || bookingDTO.getCheckOutDate() != null) {
             BigDecimal nightlyRate = bookingDTO.getNightlyRate() != null ? bookingDTO.getNightlyRate() : existingBooking.getAmountPerNight(); // Use existing amountPerNight if nightlyRate not provided in DTO
-            long days = (bookingDTO.getCheckOutDate() != null ? bookingDTO.getCheckOutDate().toEpochDay() : existingBooking.getCheckOutDate().atZone(ZoneOffset.UTC).toLocalDate().toEpochDay())
-                        - (bookingDTO.getCheckInDate() != null ? bookingDTO.getCheckInDate().toEpochDay() : existingBooking.getCheckInDate().atZone(ZoneOffset.UTC).toLocalDate().toEpochDay());
+            long days = proposedCheckOutDate.toEpochDay() - proposedCheckInDate.toEpochDay();
             existingBooking.setTotalAmount(nightlyRate.multiply(BigDecimal.valueOf(days)));
             existingBooking.setAmountPerNight(nightlyRate); // Update amountPerNight as well
         }
-        
+
         existingBooking = bookingRepository.save(existingBooking);
 
         return getBookingDetailsById(existingBooking.getId()); // Return DTO of updated booking
@@ -220,16 +224,10 @@ public class BookingService {
     public void deleteBooking(Long bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found with ID: " + bookingId));
-        
-        // Optionally, free up the room if it was booked by this booking
-        if (booking.getRoom().getStatus().equalsIgnoreCase("BOOKED") && booking.getRoom().equals(booking.getRoom())) { // Check if this booking holds the room
-             booking.getRoom().setStatus("AVAILABLE");
-             roomRepository.save(booking.getRoom());
-        }
-        
+
         Guest guest = booking.getGuest(); // Get the associated guest
         bookingRepository.delete(booking); // Delete the booking
-        
+
         // Check if the guest has any other bookings
         if (guestRepository.countBookingsByGuestId(guest.getId()) == 0) {
             guestRepository.delete(guest); // If no other bookings, delete the guest
