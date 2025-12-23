@@ -49,7 +49,7 @@ public class BookingController {
         return ResponseEntity.ok("Booking deleted successfully");
     }
 
-    @GetMapping("/rooms/available")
+    @GetMapping("/available-rooms")
     public ResponseEntity<List<RoomAvailabilityResponse>> getRoomsAvailable(
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
