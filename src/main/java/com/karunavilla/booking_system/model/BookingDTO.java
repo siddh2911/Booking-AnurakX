@@ -5,6 +5,7 @@ import jakarta.validation.constraints.*;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class BookingDTO {
@@ -12,8 +13,6 @@ public class BookingDTO {
     @NotBlank(message = "Guest full name is required")
     private String fullName;
 
-    @NotBlank(message = "Email is required")
-    @Email(message = "Email should be valid")
     private String emailId;
 
     @NotBlank(message = "Mobile number is required")
@@ -47,6 +46,8 @@ public class BookingDTO {
 
     @NotBlank(message = "Payment method is required")
     private String paymentMethod;
+
+    private List<AdditionalPay> additionalCharges;
 
     private String internalNotes;
 

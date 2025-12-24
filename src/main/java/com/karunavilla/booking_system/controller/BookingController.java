@@ -1,6 +1,5 @@
 package com.karunavilla.booking_system.controller;
 
-import com.karunavilla.booking_system.Entity.Room;
 import com.karunavilla.booking_system.model.BookingDTO;
 import com.karunavilla.booking_system.model.BookingResponseDTO;
 import com.karunavilla.booking_system.model.RoomAvailabilityRequest;

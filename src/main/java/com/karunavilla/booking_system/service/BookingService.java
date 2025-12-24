@@ -3,10 +3,7 @@ package com.karunavilla.booking_system.service;
 import com.karunavilla.booking_system.Entity.Booking;
 import com.karunavilla.booking_system.Entity.Guest;
 import com.karunavilla.booking_system.Entity.Room;
-import com.karunavilla.booking_system.model.BookingDTO;
-import com.karunavilla.booking_system.model.BookingResponseDTO;
-import com.karunavilla.booking_system.model.RoomAvailabilityRequest;
-import com.karunavilla.booking_system.model.RoomAvailabilityResponse;
+import com.karunavilla.booking_system.model.*;
 import com.karunavilla.booking_system.repository.BookingRepository;
 import com.karunavilla.booking_system.repository.GuestRepository;
 import com.karunavilla.booking_system.repository.RoomRepository;
@@ -70,6 +67,11 @@ public class BookingService {
         booking.setInternalNotes(bookingDTO.getInternalNotes());
         booking.setAmountPerNight(bookingDTO.getNightlyRate()); // Set amountPerNight
         BigDecimal calculatedTotalAmount = bookingDTO.getNightlyRate().multiply(BigDecimal.valueOf(bookingDTO.getCheckOutDate().toEpochDay() - bookingDTO.getCheckInDate().toEpochDay()));
+        if (bookingDTO.getAdditionalCharges() != null && !bookingDTO.getAdditionalCharges().isEmpty()) {
+            calculatedTotalAmount = calculatedTotalAmount.add(bookingDTO.getAdditionalCharges().stream()
+                    .map(AdditionalPay::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+        }
         booking.setTotalAmount(calculatedTotalAmount);
         booking.setStatus("CONFIRMED");
         booking.setPayments(new java.util.ArrayList<>());
@@ -190,6 +192,16 @@ public class BookingService {
             if (!overlapping.isEmpty()) {
                 throw new RuntimeException("Room is not available for the specified dates.");
             }
+        }
+        BigDecimal calculatedTotalAmount = bookingDTO.getNightlyRate().multiply(BigDecimal.valueOf(bookingDTO.getCheckOutDate().toEpochDay() - bookingDTO.getCheckInDate().toEpochDay()));
+        if (bookingDTO.getAdditionalCharges() != null && !bookingDTO.getAdditionalCharges().isEmpty()) {
+            calculatedTotalAmount = calculatedTotalAmount.add(bookingDTO.getAdditionalCharges().stream()
+                    .map(AdditionalPay::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+        }
+        if (bookingDTO.getAdvanceAmount() != null && calculatedTotalAmount != null) {
+            Payment advancePayment = new Payment();
+            advancePayment.setPendingAmount(calculatedTotalAmount.subtract(bookingDTO.getAdvanceAmount()));
         }
 
         // If no conflicts, update the booking

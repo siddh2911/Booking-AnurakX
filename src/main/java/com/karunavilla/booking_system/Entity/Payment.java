@@ -2,6 +2,8 @@ package com.karunavilla.booking_system.Entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,4 +27,8 @@ public class Payment {
     private String methodPendingAmountPaid;
     private String type; // "Advance" or "Settlement"
     private Instant paymentDate;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "additional_amount", columnDefinition = "jsonb")
+    private String additionalAmountJson;
 }
