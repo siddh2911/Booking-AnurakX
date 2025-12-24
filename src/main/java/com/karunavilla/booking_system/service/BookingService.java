@@ -199,9 +199,11 @@ public class BookingService {
                     .map(AdditionalPay::getAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add));
         }
+        existingBooking.setTotalAmount(calculatedTotalAmount);
         if (bookingDTO.getAdvanceAmount() != null && calculatedTotalAmount != null) {
             Payment advancePayment = new Payment();
             advancePayment.setPendingAmount(calculatedTotalAmount.subtract(bookingDTO.getAdvanceAmount()));
+            existingBooking.getPayments().add(advancePayment);
         }
 
         // If no conflicts, update the booking
