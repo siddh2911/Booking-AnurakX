@@ -200,10 +200,29 @@ public class BookingService {
                     .reduce(BigDecimal.ZERO, BigDecimal::add));
         }
         existingBooking.setTotalAmount(calculatedTotalAmount);
-        if (bookingDTO.getAdvanceAmount() != null && calculatedTotalAmount != null) {
-            Payment advancePayment = new Payment();
-            advancePayment.setPendingAmount(calculatedTotalAmount.subtract(bookingDTO.getAdvanceAmount()));
-            existingBooking.getPayments().add(advancePayment);
+
+        // Correctly handle payment updates
+        if (bookingDTO.getAdvanceAmount() != null) {
+            Optional<Payment> existingPaymentOpt = existingBooking.getPayments().stream()
+                    .filter(p -> "ADVANCE".equals(p.getType()))
+                    .findFirst();
+
+            if (existingPaymentOpt.isPresent()) {
+                Payment advancePayment = existingPaymentOpt.get();
+                advancePayment.setAdvanceAmount(bookingDTO.getAdvanceAmount());
+                advancePayment.setPendingAmount(calculatedTotalAmount.subtract(bookingDTO.getAdvanceAmount()));
+                if (bookingDTO.getPaymentMethod() != null) {
+                    advancePayment.setMethodAdvanceAmountPaid(bookingDTO.getPaymentMethod());
+                }
+            } else {
+                Payment newAdvancePayment = new Payment();
+                newAdvancePayment.setAdvanceAmount(bookingDTO.getAdvanceAmount());
+                newAdvancePayment.setMethodAdvanceAmountPaid(bookingDTO.getPaymentMethod());
+                newAdvancePayment.setPendingAmount(calculatedTotalAmount.subtract(bookingDTO.getAdvanceAmount()));
+                newAdvancePayment.setType("ADVANCE");
+                newAdvancePayment.setBooking(existingBooking);
+                existingBooking.getPayments().add(newAdvancePayment);
+            }
         }
 
         // If no conflicts, update the booking
