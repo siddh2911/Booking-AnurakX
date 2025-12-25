@@ -14,6 +14,7 @@ public class RoomAvailabilityResponse {
     private String roomNumber;
     private String type;
     private BigDecimal pricePerNight;
+    private String roomName;
     private String status; // e.g., "AVAILABLE"
 
     // Constructor to map from Room entity
