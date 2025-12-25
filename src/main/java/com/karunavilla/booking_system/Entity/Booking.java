@@ -30,7 +30,6 @@ public class Booking {
        private String internalNotes;
        private BigDecimal amountPerNight;
        private BigDecimal totalAmount;
-       private String roomName;
        private String status;
 
        @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
