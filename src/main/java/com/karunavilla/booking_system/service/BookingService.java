@@ -283,6 +283,11 @@ public class BookingService {
                 .map(RoomAvailabilityResponse::new) // Using the constructor for mapping
                 .collect(Collectors.toList());
     }
+
+    public List<Room> getAllRoomsAvailable() {
+        List<Room> allRooms = roomRepository.findAll();
+        return allRooms;
+    }
 }
 
 

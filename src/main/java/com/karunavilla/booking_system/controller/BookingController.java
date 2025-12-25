@@ -1,5 +1,6 @@
 package com.karunavilla.booking_system.controller;
 
+import com.karunavilla.booking_system.Entity.Room;
 import com.karunavilla.booking_system.model.BookingDTO;
 import com.karunavilla.booking_system.model.BookingResponseDTO;
 import com.karunavilla.booking_system.model.RoomAvailabilityRequest;
@@ -57,6 +58,12 @@ public class BookingController {
         request.setStartDate(startDate);
         request.setEndDate(endDate);
         List<RoomAvailabilityResponse> availableRooms = bookingService.getRoomsAvailable(request);
+        return ResponseEntity.ok(availableRooms);
+    }
+
+    @GetMapping("/allRooms")
+    public ResponseEntity<?> getAllRoomsAvailable(){
+        List<Room> availableRooms = bookingService.getAllRoomsAvailable();
         return ResponseEntity.ok(availableRooms);
     }
 }
