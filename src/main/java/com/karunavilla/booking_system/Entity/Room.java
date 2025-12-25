@@ -13,6 +13,7 @@ public class Room {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String roomNumber; // "101", "201", etc.
+    private String roomName;
     private String type; // "Single", "Suite", etc.
     private BigDecimal pricePerNight;
     private String status; // "Available", "Dirty", etc.

@@ -23,6 +23,7 @@ public class RoomAvailabilityResponse {
         this.roomNumber = room.getRoomNumber();
         this.type = room.getType();
         this.pricePerNight = room.getPricePerNight();
+        this.roomName = room.getRoomNumber();
         this.status = room.getStatus();
     }
 }
