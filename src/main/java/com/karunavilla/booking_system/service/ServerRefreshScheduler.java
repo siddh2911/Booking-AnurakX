@@ -10,12 +10,8 @@ public class ServerRefreshScheduler {
 
     private static final Logger logger = LoggerFactory.getLogger(ServerRefreshScheduler.class);
 
-    @Scheduled(fixedRate = 900000) // 15 minutes = 900,000 milliseconds
+    @Scheduled(fixedRate = 240000) // 4 minutes
     public void refreshDbServer() {
-        logger.info("DB server refresh task executed. This typically involves clearing application-level caches or validating connections.");
-        // Placeholder for actual DB server refresh logic:
-        // - Invalidate application-level caches (e.g., Hibernate 2nd level cache)
-        // - Optionally, perform a health check or re-validation of the database connection pool.
-        //   (Specific implementation depends on the connection pool and ORM being used)
+        logger.info("DB server refresh task executed to keep the application alive.");
     }
 }

@@ -29,6 +29,6 @@ public class Payment {
     private Instant paymentDate;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "additional_amount", columnDefinition = "jsonb")
+    @Column(name = "additional_amount")
     private String additionalAmountJson;
 }
