@@ -39,7 +39,7 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "https://booking-ui-anurak-x.vercel.app/","https://bookingui-anurakx.onrender.com/")); // Allow your frontend origin
+        configuration.setAllowedOrigins(Arrays.asList("https://api.karunavillas.com/","http://localhost:3000", "https://booking-ui-anurak-x.vercel.app/","https://bookingui-anurakx.onrender.com/")); // Allow your frontend origin
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Collections.singletonList("*")); // Allow all headers
         configuration.setAllowCredentials(true); // Allow credentials (e.g., cookies, authorization headers)
