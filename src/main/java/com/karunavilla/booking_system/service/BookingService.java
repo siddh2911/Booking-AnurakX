@@ -10,6 +10,9 @@ import com.karunavilla.booking_system.repository.RoomRepository;
 import com.karunavilla.booking_system.Entity.Payment;
 import java.math.BigDecimal;
 
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.karunavilla.booking_system.repository.PaymentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,8 +29,11 @@ import java.util.stream.Collectors;
 @Service
 public class BookingService {
 
+    private static final Logger logger = LoggerFactory.getLogger(BookingService.class);
+
     @Autowired
     private BookingRepository bookingRepository;
+
 
     @Autowired
     private GuestRepository guestRepository;
@@ -40,54 +46,61 @@ public class BookingService {
 
     @Transactional
     public Booking createBooking(BookingDTO bookingDTO) {
-        Guest guest = new Guest();
-        guest.setFullName(bookingDTO.getFullName());
-        guest.setEmail(bookingDTO.getEmailId());
-        guest.setMobileNumber(bookingDTO.getMobileNumber());
-        guest = guestRepository.save(guest);
+        logger.info("Creating booking with DTO: {}", bookingDTO);
+        try {
+            Guest guest = new Guest();
+            guest.setFullName(bookingDTO.getFullName());
+            guest.setEmail(bookingDTO.getEmailId());
+            guest.setMobileNumber(bookingDTO.getMobileNumber());
+            guest = guestRepository.save(guest);
 
-        Room room = roomRepository.findByRoomNumber(bookingDTO.getRoomNo())
-                .orElseThrow(() -> new RuntimeException("Room not found"));
+            Room room = roomRepository.findByRoomNumber(bookingDTO.getRoomNo())
+                    .orElseThrow(() -> new RuntimeException("Room not found"));
 
-        Instant checkInDate = bookingDTO.getCheckInDate().atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant checkOutDate = bookingDTO.getCheckOutDate().atStartOfDay().toInstant(ZoneOffset.UTC);
+            Instant checkInDate = bookingDTO.getCheckInDate().atStartOfDay().toInstant(ZoneOffset.UTC);
+            Instant checkOutDate = bookingDTO.getCheckOutDate().atStartOfDay().toInstant(ZoneOffset.UTC);
 
-        List<Booking> overlappingBookings = bookingRepository.findOverlappingBookingsForRoom(room, checkInDate, checkOutDate);
+            List<Booking> overlappingBookings = bookingRepository.findOverlappingBookingsForRoom(room, checkInDate, checkOutDate);
 
-        if (!overlappingBookings.isEmpty()) {
-            throw new RuntimeException("Room " + bookingDTO.getRoomNo() + " is not available for the selected dates.");
+            if (!overlappingBookings.isEmpty()) {
+                throw new RuntimeException("Room " + bookingDTO.getRoomNo() + " is not available for the selected dates.");
+            }
+
+            Booking booking = new Booking();
+            booking.setGuest(guest);
+            booking.setRoom(room);
+            booking.setCheckInDate(checkInDate);
+            booking.setCheckOutDate(checkOutDate);
+            booking.setBookingSource(bookingDTO.getBookingSource());
+            booking.setInternalNotes(bookingDTO.getInternalNotes());
+            booking.setAmountPerNight(bookingDTO.getNightlyRate()); // Set amountPerNight
+            BigDecimal calculatedTotalAmount = bookingDTO.getNightlyRate().multiply(BigDecimal.valueOf(bookingDTO.getCheckOutDate().toEpochDay() - bookingDTO.getCheckInDate().toEpochDay()));
+            if (bookingDTO.getAdditionalCharges() != null && !bookingDTO.getAdditionalCharges().isEmpty()) {
+                calculatedTotalAmount = calculatedTotalAmount.add(bookingDTO.getAdditionalCharges().stream()
+                        .map(AdditionalPay::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add));
+            }
+            booking.setTotalAmount(calculatedTotalAmount);
+            booking.setStatus("CONFIRMED");
+            booking.setPayments(new java.util.ArrayList<>());
+
+            if (bookingDTO.getAdvanceAmount() != null && calculatedTotalAmount != null) {
+                Payment advancePayment = new Payment();
+                advancePayment.setAdvanceAmount(bookingDTO.getAdvanceAmount());
+                advancePayment.setMethodAdvanceAmountPaid(bookingDTO.getPaymentMethod());
+                advancePayment.setPendingAmount(calculatedTotalAmount.subtract(bookingDTO.getAdvanceAmount()));
+                advancePayment.setType("ADVANCE");
+                advancePayment.setBooking(booking);
+                booking.getPayments().add(advancePayment);
+            }
+
+            booking = bookingRepository.save(booking);
+            logger.info("Booking created successfully with ID: {}", booking.getId());
+            return booking;
+        } catch (Exception e) {
+            logger.error("Error creating booking", e);
+            throw e;
         }
-
-        Booking booking = new Booking();
-        booking.setGuest(guest);
-        booking.setRoom(room);
-        booking.setCheckInDate(checkInDate);
-        booking.setCheckOutDate(checkOutDate);
-        booking.setBookingSource(bookingDTO.getBookingSource());
-        booking.setInternalNotes(bookingDTO.getInternalNotes());
-        booking.setAmountPerNight(bookingDTO.getNightlyRate()); // Set amountPerNight
-        BigDecimal calculatedTotalAmount = bookingDTO.getNightlyRate().multiply(BigDecimal.valueOf(bookingDTO.getCheckOutDate().toEpochDay() - bookingDTO.getCheckInDate().toEpochDay()));
-        if (bookingDTO.getAdditionalCharges() != null && !bookingDTO.getAdditionalCharges().isEmpty()) {
-            calculatedTotalAmount = calculatedTotalAmount.add(bookingDTO.getAdditionalCharges().stream()
-                    .map(AdditionalPay::getAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add));
-        }
-        booking.setTotalAmount(calculatedTotalAmount);
-        booking.setStatus("CONFIRMED");
-        booking.setPayments(new java.util.ArrayList<>());
-
-        if (bookingDTO.getAdvanceAmount() != null && calculatedTotalAmount != null) {
-            Payment advancePayment = new Payment();
-            advancePayment.setAdvanceAmount(bookingDTO.getAdvanceAmount());
-            advancePayment.setMethodAdvanceAmountPaid(bookingDTO.getPaymentMethod());
-            advancePayment.setPendingAmount(calculatedTotalAmount.subtract(bookingDTO.getAdvanceAmount()));
-            advancePayment.setType("ADVANCE");
-            advancePayment.setBooking(booking);
-            booking.getPayments().add(advancePayment);
-        }
-
-        booking = bookingRepository.save(booking);
-        return booking;
     }
 
     public List<BookingResponseDTO> getAllBookingDetails() {

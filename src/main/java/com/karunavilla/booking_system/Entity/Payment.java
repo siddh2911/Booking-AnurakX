@@ -28,7 +28,6 @@ public class Payment {
     private String type; // "Advance" or "Settlement"
     private Instant paymentDate;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "additional_amount")
+    @Column(name = "additional_amount" ,columnDefinition = "LONGTEXT")
     private String additionalAmountJson;
 }
