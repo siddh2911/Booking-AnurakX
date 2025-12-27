@@ -19,12 +19,14 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findExpiredBookingsWithBookedRooms(@Param("currentTime") Instant currentTime);
 
     @Query("SELECT b FROM Booking b WHERE " +
-           "(b.checkInDate < :requestedCheckOut AND b.checkOutDate > :requestedCheckIn)")
+           "(b.checkInDate < :requestedCheckOut AND b.checkOutDate > :requestedCheckIn) " +
+           "AND b.status = 'CONFIRMED'")
     List<Booking> findOverlappingBookings(@Param("requestedCheckIn") Instant requestedCheckIn,
                                           @Param("requestedCheckOut") Instant requestedCheckOut);
 
     @Query("SELECT b FROM Booking b WHERE b.room = :room AND " +
-           "(b.checkInDate < :requestedCheckOut AND b.checkOutDate > :requestedCheckIn)")
+           "(b.checkInDate < :requestedCheckOut AND b.checkOutDate > :requestedCheckIn) " +
+           "AND b.status = 'CONFIRMED'")
     List<Booking> findOverlappingBookingsForRoom(@Param("room") Room room,
                                                  @Param("requestedCheckIn") Instant requestedCheckIn,
                                                  @Param("requestedCheckOut") Instant requestedCheckOut);
